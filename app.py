@@ -169,11 +169,6 @@ if st.button("Predict Salary"):
     # ONE HOT ENCODING
     # =========================
     input_data = pd.get_dummies(input_data)
-    
-
-   # Save with compression
-   joblib.dump(model,"salary_prediction_model.pkl",compress=3)
-
 
     # =========================
     # ALIGN COLUMNS
