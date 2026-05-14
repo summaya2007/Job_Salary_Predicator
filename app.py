@@ -172,7 +172,7 @@ if st.button("Predict Salary"):
     
 
    # Save with compression
-   joblib.dump(model, "salary_prediction_model.pkl", compress=3)
+   joblib.dump(model,"salary_prediction_model.pkl",compress=3)
 
 
     # =========================
