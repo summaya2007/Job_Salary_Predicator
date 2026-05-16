@@ -1,200 +1,286 @@
-# =========================
-# IMPORT LIBRARIES
-# =========================
 import streamlit as st
 import pandas as pd
-import pickle
+import os
+import hashlib
 import joblib
 
-# =========================
+# =====================================
 # PAGE CONFIG
-# =========================
+# =====================================
 st.set_page_config(
     page_title="Salary Prediction App",
     page_icon="💼",
     layout="centered"
 )
 
-# =========================
-# LOAD MODEL FILES
-# =========================
-model = joblib.load(open("knn_model.pkl", "rb"))
-scaler = joblib.load(open("scaler.pkl", "rb"))
-columns = joblib.load(open("columns.pkl", "rb"))
+# =====================================
+# CUSTOM CSS
+# =====================================
+st.markdown("""
+<style>
 
-# =========================
-# HELPER FUNCTION
-# =========================
-def get_options(prefix):
+.stApp {
+    background: linear-gradient(to right, #141e30, #243b55);
+}
 
-    values = []
+.main-box {
+    background-color: white;
+    padding: 2rem;
+    border-radius: 15px;
+    box-shadow: 0px 0px 20px rgba(0,0,0,0.3);
+}
 
-    for col in columns:
-        if col.startswith(prefix):
-            values.append(col.replace(prefix, ""))
+.title {
+    text-align: center;
+    color: #243b55;
+    font-size: 40px;
+    font-weight: bold;
+}
 
-    values = sorted(list(set(values)))
+.subtitle {
+    text-align: center;
+    color: gray;
+    margin-bottom: 20px;
+}
 
-    return ["Other"] + values
+.stButton>button {
+    width: 100%;
+    border-radius: 10px;
+    height: 3em;
+    background-color: #243b55;
+    color: white;
+    font-size: 18px;
+    border: none;
+}
 
-# =========================
-# GET DROPDOWN OPTIONS
-# =========================
-job_options = get_options("job_title_")
+.stButton>button:hover {
+    background-color: #141e30;
+    color: white;
+}
 
-edu_options = get_options("education_level_")
+</style>
+""", unsafe_allow_html=True)
 
-loc_options = get_options("location_")
+# =====================================
+# USER FILE
+# =====================================
+USER_FILE = "users.csv"
 
-industry_options = get_options("industry_")
+if not os.path.exists(USER_FILE):
+    df = pd.DataFrame(columns=["username", "password"])
+    df.to_csv(USER_FILE, index=False)
 
-company_options = get_options("company_size_")
+# =====================================
+# HASH PASSWORD
+# =====================================
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
-remote_options = get_options("remote_work_")
+# =====================================
+# LOAD USERS
+# =====================================
+def load_users():
+    return pd.read_csv(USER_FILE)
 
-# =========================
-# APP TITLE
-# =========================
-st.title("💼 Salary Prediction App")
+# =====================================
+# SAVE USERS
+# =====================================
+def save_user(username, password):
 
-st.write("Predict employee salary using KNN Machine Learning Model")
+    users = load_users()
 
-# =========================
-# USER INPUTS
-# =========================
-experience = st.number_input(
-    "Experience (Years)",
-    min_value=0,
-    max_value=40,
-    value=1
-)
-
-skills = st.number_input(
-    "Skills Count",
-    min_value=0,
-    max_value=50,
-    value=5
-)
-
-certifications = st.number_input(
-    "Certifications",
-    min_value=0,
-    max_value=20,
-    value=1
-)
-
-job = st.selectbox(
-    "Job Title",
-    job_options
-)
-
-education = st.selectbox(
-    "Education Level",
-    edu_options
-)
-
-location = st.selectbox(
-    "Location",
-    loc_options
-)
-
-industry = st.selectbox(
-    "Industry",
-    industry_options
-)
-
-company = st.selectbox(
-    "Company Size",
-    company_options
-)
-
-remote = st.selectbox(
-    "Remote Work",
-    remote_options
-)
-
-# =========================
-# PREDICT BUTTON
-# =========================
-if st.button("Predict Salary"):
-
-    # =========================
-    # CREATE INPUT DATAFRAME
-    # =========================
-    input_data = pd.DataFrame({
-        "experience_years": [experience],
-        "skills_count": [skills],
-        "certifications": [certifications],
-        "job_title": [job],
-        "education_level": [education],
-        "location": [location],
-        "industry": [industry],
-        "company_size": [company],
-        "remote_work": [remote]
+    new_user = pd.DataFrame({
+        "username": [username],
+        "password": [hash_password(password)]
     })
 
-    # =========================
-    # FEATURE ENGINEERING
-    # =========================
-    input_data["exp_squared"] = (
-        input_data["experience_years"] ** 2
+    users = pd.concat([users, new_user], ignore_index=True)
+
+    users.to_csv(USER_FILE, index=False)
+
+# =====================================
+# LOGIN CHECK
+# =====================================
+def login_user(username, password):
+
+    users = load_users()
+
+    hashed = hash_password(password)
+
+    result = users[
+        (users["username"] == username) &
+        (users["password"] == hashed)
+    ]
+
+    return not result.empty
+
+# =====================================
+# SESSION STATE
+# =====================================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+# =====================================
+# SIDEBAR
+# =====================================
+menu = ["Login", "Signup"]
+
+choice = st.sidebar.selectbox("Select Option", menu)
+
+# =====================================
+# LOGIN PAGE
+# =====================================
+if choice == "Login" and not st.session_state.logged_in:
+
+    st.markdown('<div class="main-box">', unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="title">💼 Salary Predictor</div>',
+        unsafe_allow_html=True
     )
 
-    input_data["skill_per_exp"] = (
-        input_data["skills_count"] /
-        (input_data["experience_years"] + 1)
+    st.markdown(
+        '<div class="subtitle">Login to continue</div>',
+        unsafe_allow_html=True
     )
 
-    input_data["cert_per_skill"] = (
-        input_data["certifications"] /
-        (input_data["skills_count"] + 1)
+    username = st.text_input("👤 Username")
+
+    password = st.text_input(
+        "🔒 Password",
+        type="password"
     )
 
-    # =========================
-    # SENIORITY
-    # =========================
-    input_data["seniority"] = pd.cut(
-        input_data["experience_years"],
-        bins=[0, 2, 5, 10, 20, 40],
-        labels=[
-            "Fresher",
-            "Junior",
-            "Mid",
-            "Senior",
-            "Expert"
-        ]
+    if st.button("Login"):
+
+        if login_user(username, password):
+
+            st.session_state.logged_in = True
+            st.success("Login Successful")
+            st.rerun()
+
+        else:
+            st.error("Invalid Username or Password")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================
+# SIGNUP PAGE
+# =====================================
+elif choice == "Signup" and not st.session_state.logged_in:
+
+    st.markdown('<div class="main-box">', unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="title">📝 Create Account</div>',
+        unsafe_allow_html=True
     )
 
-    # =========================
-    # ONE HOT ENCODING
-    # =========================
-    input_data = pd.get_dummies(input_data)
-
-    # =========================
-    # ALIGN COLUMNS
-    # =========================
-    input_data = input_data.reindex(
-        columns=columns,
-        fill_value=0
+    st.markdown(
+        '<div class="subtitle">Signup to use the app</div>',
+        unsafe_allow_html=True
     )
 
-    # =========================
-    # SCALE DATA
-    # =========================
-    input_scaled = scaler.transform(input_data)
+    new_user = st.text_input("👤 Create Username")
 
-    # =========================
-    # PREDICTION
-    # =========================
-    prediction = model.predict(input_scaled)
-
-    predicted_salary = int(prediction[0])
-
-    # =========================
-    # OUTPUT
-    # =========================
-    st.success(
-        f"💰 Predicted Salary: ₹ {predicted_salary:,}"
+    new_password = st.text_input(
+        "🔒 Create Password",
+        type="password"
     )
 
-    st.balloons()
+    if st.button("Signup"):
+
+        users = load_users()
+
+        if new_user in users["username"].values:
+            st.error("Username already exists")
+
+        elif new_user == "" or new_password == "":
+            st.warning("Please fill all fields")
+
+        else:
+            save_user(new_user, new_password)
+            st.success("Account Created Successfully")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================
+# MAIN APP
+# =====================================
+if st.session_state.logged_in:
+
+    st.title("💼 Salary Prediction App")
+
+    st.write("Predict employee salary using ML model")
+
+    # LOAD FILES
+    model = joblib.load("salary_prediction_model.pkl")
+    scaler = joblib.load("scaler.pkl")
+    columns = joblib.load("model_features.pkl")
+
+    # INPUTS
+    experience = st.number_input(
+        "Experience (Years)",
+        0, 50, 1
+    )
+
+    skills = st.number_input(
+        "Skills Count",
+        0, 50, 5
+    )
+
+    certifications = st.number_input(
+        "Certifications",
+        0, 20, 1
+    )
+
+    job_title = st.selectbox(
+        "Job Title",
+        ["Data Scientist", "Software Engineer", "Manager", "Other"]
+    )
+
+    education = st.selectbox(
+        "Education Level",
+        ["Bachelor", "Master", "PhD", "Other"]
+    )
+
+    location = st.selectbox(
+        "Location",
+        ["Bangalore", "Delhi", "Mumbai", "Other"]
+    )
+
+    # PREDICT
+    if st.button("Predict Salary"):
+
+        input_data = pd.DataFrame({
+            "Experience": [experience],
+            "Skills": [skills],
+            "Certifications": [certifications],
+            "Job_Title": [job_title],
+            "Education_Level": [education],
+            "Location": [location]
+        })
+
+        # ENCODING
+        input_data = pd.get_dummies(input_data)
+
+        # ALIGN COLUMNS
+        input_data = input_data.reindex(
+            columns=columns,
+            fill_value=0
+        )
+
+        # SCALE
+        input_scaled = scaler.transform(input_data)
+
+        # PREDICT
+        prediction = model.predict(input_scaled)
+
+        st.success(
+            f"💰 Predicted Salary: ₹ {round(prediction[0], 2)}"
+        )
+
+    # LOGOUT
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
