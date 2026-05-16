@@ -1,286 +1,369 @@
+# =========================================
+# BEAUTIFUL MODERN LOGIN UI
+# =========================================
+
 import streamlit as st
 import pandas as pd
-import os
+import sqlite3
 import hashlib
 import joblib
 
-# =====================================
+# =========================================
 # PAGE CONFIG
-# =====================================
+# =========================================
 st.set_page_config(
     page_title="Salary Prediction App",
     page_icon="💼",
-    layout="centered"
+    layout="wide"
 )
 
-# =====================================
+# =========================================
 # CUSTOM CSS
-# =====================================
+# =========================================
 st.markdown("""
 <style>
 
+/* MAIN BACKGROUND */
 .stApp {
-    background: linear-gradient(to right, #141e30, #243b55);
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    color: white;
 }
 
-.main-box {
-    background-color: white;
-    padding: 2rem;
-    border-radius: 15px;
-    box-shadow: 0px 0px 20px rgba(0,0,0,0.3);
+/* REMOVE STREAMLIT MENU */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+/* SIDEBAR */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #111827, #1e1b4b);
+    border-right: 1px solid rgba(255,255,255,0.1);
 }
 
+/* LOGIN CARD */
+.login-box {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(10px);
+    padding: 40px;
+    border-radius: 25px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0px 0px 30px rgba(0,0,0,0.4);
+}
+
+/* TITLES */
 .title {
     text-align: center;
-    color: #243b55;
-    font-size: 40px;
+    font-size: 50px;
     font-weight: bold;
+    background: linear-gradient(to right, #c084fc, #60a5fa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .subtitle {
     text-align: center;
-    color: gray;
-    margin-bottom: 20px;
+    color: #cbd5e1;
+    margin-bottom: 30px;
+    font-size: 18px;
 }
 
+/* INPUT BOXES */
+.stTextInput input {
+    background-color: rgba(255,255,255,0.06);
+    color: white;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    height: 50px;
+}
+
+/* BUTTON */
 .stButton>button {
     width: 100%;
-    border-radius: 10px;
-    height: 3em;
-    background-color: #243b55;
+    height: 52px;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(to right, #c026d3, #2563eb);
     color: white;
     font-size: 18px;
-    border: none;
+    font-weight: bold;
 }
 
 .stButton>button:hover {
-    background-color: #141e30;
-    color: white;
+    opacity: 0.9;
+}
+
+/* PREDICTION CARD */
+.pred-card {
+    background: rgba(255,255,255,0.05);
+    padding: 30px;
+    border-radius: 20px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* SUCCESS BOX */
+.success-box {
+    background: rgba(16,185,129,0.2);
+    padding: 15px;
+    border-radius: 15px;
+    text-align: center;
+    color: #6ee7b7;
+    font-size: 20px;
+    font-weight: bold;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# =====================================
-# USER FILE
-# =====================================
-USER_FILE = "users.csv"
+# =========================================
+# DATABASE
+# =========================================
+conn = sqlite3.connect("users.db", check_same_thread=False)
+cursor = conn.cursor()
 
-if not os.path.exists(USER_FILE):
-    df = pd.DataFrame(columns=["username", "password"])
-    df.to_csv(USER_FILE, index=False)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users(
+username TEXT,
+password TEXT
+)
+""")
 
-# =====================================
+conn.commit()
+
+# =========================================
 # HASH PASSWORD
-# =====================================
+# =========================================
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# =====================================
-# LOAD USERS
-# =====================================
-def load_users():
-    return pd.read_csv(USER_FILE)
+# =========================================
+# ADD USER
+# =========================================
+def add_user(username, password):
 
-# =====================================
-# SAVE USERS
-# =====================================
-def save_user(username, password):
+    cursor.execute(
+        "INSERT INTO users(username,password) VALUES (?,?)",
+        (username, hash_password(password))
+    )
 
-    users = load_users()
+    conn.commit()
 
-    new_user = pd.DataFrame({
-        "username": [username],
-        "password": [hash_password(password)]
-    })
-
-    users = pd.concat([users, new_user], ignore_index=True)
-
-    users.to_csv(USER_FILE, index=False)
-
-# =====================================
-# LOGIN CHECK
-# =====================================
+# =========================================
+# LOGIN USER
+# =========================================
 def login_user(username, password):
 
-    users = load_users()
+    cursor.execute(
+        "SELECT * FROM users WHERE username=? AND password=?",
+        (username, hash_password(password))
+    )
 
-    hashed = hash_password(password)
+    data = cursor.fetchone()
 
-    result = users[
-        (users["username"] == username) &
-        (users["password"] == hashed)
-    ]
+    return data
 
-    return not result.empty
-
-# =====================================
-# SESSION STATE
-# =====================================
+# =========================================
+# SESSION
+# =========================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# =====================================
+# =========================================
 # SIDEBAR
-# =====================================
-menu = ["Login", "Signup"]
+# =========================================
+st.sidebar.title("💼 Salary Predictor")
 
-choice = st.sidebar.selectbox("Select Option", menu)
+menu = st.sidebar.radio(
+    "Navigation",
+    ["Login", "Signup"]
+)
 
-# =====================================
-# LOGIN PAGE
-# =====================================
-if choice == "Login" and not st.session_state.logged_in:
-
-    st.markdown('<div class="main-box">', unsafe_allow_html=True)
-
-    st.markdown(
-        '<div class="title">💼 Salary Predictor</div>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        '<div class="subtitle">Login to continue</div>',
-        unsafe_allow_html=True
-    )
-
-    username = st.text_input("👤 Username")
-
-    password = st.text_input(
-        "🔒 Password",
-        type="password"
-    )
-
-    if st.button("Login"):
-
-        if login_user(username, password):
-
-            st.session_state.logged_in = True
-            st.success("Login Successful")
-            st.rerun()
-
-        else:
-            st.error("Invalid Username or Password")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# =====================================
+# =========================================
 # SIGNUP PAGE
-# =====================================
-elif choice == "Signup" and not st.session_state.logged_in:
+# =========================================
+if menu == "Signup" and not st.session_state.logged_in:
 
-    st.markdown('<div class="main-box">', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1,2,1])
 
-    st.markdown(
-        '<div class="title">📝 Create Account</div>',
-        unsafe_allow_html=True
-    )
+    with col2:
 
-    st.markdown(
-        '<div class="subtitle">Signup to use the app</div>',
-        unsafe_allow_html=True
-    )
+        st.markdown('<div class="login-box">', unsafe_allow_html=True)
 
-    new_user = st.text_input("👤 Create Username")
+        st.markdown(
+            '<div class="title">Create Account</div>',
+            unsafe_allow_html=True
+        )
 
-    new_password = st.text_input(
-        "🔒 Create Password",
-        type="password"
-    )
+        st.markdown(
+            '<div class="subtitle">Signup to continue</div>',
+            unsafe_allow_html=True
+        )
 
-    if st.button("Signup"):
+        new_user = st.text_input("Username")
 
-        users = load_users()
+        new_password = st.text_input(
+            "Password",
+            type="password"
+        )
 
-        if new_user in users["username"].values:
-            st.error("Username already exists")
+        if st.button("Signup"):
 
-        elif new_user == "" or new_password == "":
-            st.warning("Please fill all fields")
+            try:
+                add_user(new_user, new_password)
 
-        else:
-            save_user(new_user, new_password)
-            st.success("Account Created Successfully")
+                st.success("Account Created Successfully")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+            except:
+                st.error("Username already exists")
 
-# =====================================
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# =========================================
+# LOGIN PAGE
+# =========================================
+if menu == "Login" and not st.session_state.logged_in:
+
+    col1, col2, col3 = st.columns([1,2,1])
+
+    with col2:
+
+        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+
+        st.markdown(
+            '<div class="title">Welcome Back 👋</div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            '<div class="subtitle">Login to continue</div>',
+            unsafe_allow_html=True
+        )
+
+        username = st.text_input("Username")
+
+        password = st.text_input(
+            "Password",
+            type="password"
+        )
+
+        if st.button("Login"):
+
+            result = login_user(username, password)
+
+            if result:
+
+                st.session_state.logged_in = True
+                st.session_state.username = username
+                st.rerun()
+
+            else:
+                st.error("Invalid Username or Password")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# =========================================
 # MAIN APP
-# =====================================
+# =========================================
 if st.session_state.logged_in:
 
     st.title("💼 Salary Prediction App")
 
-    st.write("Predict employee salary using ML model")
+    st.write(
+        f"Welcome, **{st.session_state.username}** 👋"
+    )
 
-    # LOAD FILES
     model = joblib.load("salary_prediction_model.pkl")
     scaler = joblib.load("scaler.pkl")
     columns = joblib.load("model_features.pkl")
 
-    # INPUTS
-    experience = st.number_input(
-        "Experience (Years)",
-        0, 50, 1
-    )
+    col1, col2 = st.columns([2,1])
 
-    skills = st.number_input(
-        "Skills Count",
-        0, 50, 5
-    )
+    with col1:
 
-    certifications = st.number_input(
-        "Certifications",
-        0, 20, 1
-    )
-
-    job_title = st.selectbox(
-        "Job Title",
-        ["Data Scientist", "Software Engineer", "Manager", "Other"]
-    )
-
-    education = st.selectbox(
-        "Education Level",
-        ["Bachelor", "Master", "PhD", "Other"]
-    )
-
-    location = st.selectbox(
-        "Location",
-        ["Bangalore", "Delhi", "Mumbai", "Other"]
-    )
-
-    # PREDICT
-    if st.button("Predict Salary"):
-
-        input_data = pd.DataFrame({
-            "Experience": [experience],
-            "Skills": [skills],
-            "Certifications": [certifications],
-            "Job_Title": [job_title],
-            "Education_Level": [education],
-            "Location": [location]
-        })
-
-        # ENCODING
-        input_data = pd.get_dummies(input_data)
-
-        # ALIGN COLUMNS
-        input_data = input_data.reindex(
-            columns=columns,
-            fill_value=0
+        experience = st.number_input(
+            "Experience (Years)",
+            0, 50, 1
         )
 
-        # SCALE
-        input_scaled = scaler.transform(input_data)
-
-        # PREDICT
-        prediction = model.predict(input_scaled)
-
-        st.success(
-            f"💰 Predicted Salary: ₹ {round(prediction[0], 2)}"
+        skills = st.number_input(
+            "Skills Count",
+            0, 50, 5
         )
 
-    # LOGOUT
-    if st.button("Logout"):
+        certifications = st.number_input(
+            "Certifications",
+            0, 20, 1
+        )
+
+        job_title = st.selectbox(
+            "Job Title",
+            ["Data Scientist",
+             "Software Engineer",
+             "Manager",
+             "Other"]
+        )
+
+        education = st.selectbox(
+            "Education Level",
+            ["Bachelor",
+             "Master",
+             "PhD",
+             "Other"]
+        )
+
+        location = st.selectbox(
+            "Location",
+            ["Bangalore",
+             "Delhi",
+             "Mumbai",
+             "Other"]
+        )
+
+        predict = st.button("Predict Salary")
+
+    with col2:
+
+        st.markdown(
+            '<div class="pred-card">',
+            unsafe_allow_html=True
+        )
+
+        st.subheader("Prediction Result")
+
+        if predict:
+
+            input_data = pd.DataFrame({
+                "Experience": [experience],
+                "Skills": [skills],
+                "Certifications": [certifications],
+                "Job_Title": [job_title],
+                "Education_Level": [education],
+                "Location": [location]
+            })
+
+            input_data = pd.get_dummies(input_data)
+
+            input_data = input_data.reindex(
+                columns=columns,
+                fill_value=0
+            )
+
+            input_scaled = scaler.transform(input_data)
+
+            prediction = model.predict(input_scaled)
+
+            st.markdown(
+                f'''
+                <div class="success-box">
+                ₹ {round(prediction[0],2)}
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.sidebar.button("Logout"):
+
         st.session_state.logged_in = False
         st.rerun()
